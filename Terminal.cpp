@@ -1,148 +1,167 @@
 #include <iostream>
 #include <vector>
+#include <string>
 #include <ctime>
 #include <cstdlib>
+#include <algorithm>
+#include <random>
 
-using namespace std;
+enum Role { WEREWOLF, VILLAGER, SEER, BEGGAR };
 
 struct Player {
-    string name;
-    bool isWerewolf;
-    bool isAlive;
+    std::string name;
+    Role role;
+    bool alive;
 };
 
-void initializePlayers(vector<Player>& players, int numPlayers) {
-    cout << "\nInitializing players..." << endl;
-    for (int i = 0; i < numPlayers; i++) {
-        Player player;
-        cout << "Enter player " << i + 1 << " name: ";
-        cin >> player.name;
-        player.isWerewolf = false;
-        player.isAlive = true;
-        players.push_back(player);
-    }
+void assignRoles(std::vector<Player>& players) {
+    std::srand(std::time(0));
+    int numPlayers = players.size();
+    int numWerewolves = numPlayers / 3;
+    int numSeers = 1;
+    int numBeggars = 1;
+
+    for (int i = 0; i < numWerewolves; ++i) players[i].role = WEREWOLF;
+    for (int i = numWerewolves; i < numWerewolves + numSeers; ++i) players[i].role = SEER;
+    for (int i = numWerewolves + numSeers; i < numPlayers - 1; ++i) players[i].role = VILLAGER;
+    players[numPlayers - 1].role = BEGGAR;
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(players.begin(), players.end(), g);
 }
 
-void assignRoles(vector<Player>& players) {
-    srand(time(0));
-    int numWerewolves = 1; // จำนวนหมาป่า
-    int assigned = 0;
-
-    while (assigned < numWerewolves) {
-        int randomIndex = rand() % players.size();
-        if (!players[randomIndex].isWerewolf) {
-            players[randomIndex].isWerewolf = true;
-            assigned++;
-        }
-    }
-    cout << "Roles assigned!\n";
-}
-
-void displayAlivePlayers(const vector<Player>& players) {
-    cout << "\nAlive Players: " << endl;
+void displayRoles(const std::vector<Player>& players) {
     for (const auto& player : players) {
-        if (player.isAlive) {
-            cout << player.name << endl;
+        std::cout << player.name << " is a ";
+        switch (player.role) {
+            case WEREWOLF: std::cout << "Werewolf"; break;
+            case VILLAGER: std::cout << "Villager"; break;
+            case SEER: std::cout << "Seer"; break;
+            case BEGGAR: std::cout << "Beggar"; break;
         }
+        std::cout << std::endl;
     }
 }
 
-Player* findPlayerByName(vector<Player>& players, const string& name) {
+void dayPhase(std::vector<Player>& players) {
+    std::cout << "Day breaks. Villagers, choose someone to lynch." << std::endl;
+    std::string targetName;
+    std::cout << "Enter the name of the player to lynch: ";
+    std::cin >> targetName;
+
     for (auto& player : players) {
-        if (player.name == name && player.isAlive) {
-            return &player;
+        if (player.name == targetName && player.alive) {
+            player.alive = false;
+            std::cout << player.name << " was lynched by the Villagers." << std::endl;
+            if (player.role == BEGGAR) {
+                std::cout << "The Beggar was lynched! The Beggar wins!" << std::endl;
+                exit(0);
+            }
+            break;
         }
     }
-    return nullptr;
 }
 
-bool werewolfAction(vector<Player>& players) {
-    string target;
-    cout << "\nWerewolf, choose a player to eliminate: ";
-    cin >> target;
-
-    Player* targetPlayer = findPlayerByName(players, target);
-    if (targetPlayer) {
-        targetPlayer->isAlive = false;
-        cout << target << " has been eliminated by the Werewolf!\n";
-        return true;
-    } else {
-        cout << "Invalid target. Try again." << endl;
-        return false;
-    }
-}
-
-bool villagersVote(vector<Player>& players) {
-    string target;
-    cout << "\nVillagers, vote to eliminate a player: ";
-    cin >> target;
-
-    Player* targetPlayer = findPlayerByName(players, target);
-    if (targetPlayer) {
-        targetPlayer->isAlive = false;
-        cout << target << " has been eliminated by the villagers!\n";
-        return true;
-    } else {
-        cout << "Invalid target. Try again." << endl;
-        return false;
-    }
-}
-
-bool checkWinCondition(const vector<Player>& players) {
-    int werewolfCount = 0;
-    int villagerCount = 0;
-
+bool gameOver(const std::vector<Player>& players) {
+    int werewolves = 0, villagers = 0;
     for (const auto& player : players) {
-        if (player.isAlive) {
-            if (player.isWerewolf) werewolfCount++;
-            else villagerCount++;
+        if (player.alive) {
+            if (player.role == WEREWOLF) ++werewolves;
+            else ++villagers;
+        }
+    }
+    return werewolves == 0 || werewolves >= villagers;
+}
+
+void nightPhase(std::vector<Player>& players) {
+    std::cout << "Night falls. Werewolves, choose your victim." << std::endl;
+
+    for (auto& player : players) {
+        if (player.alive && player.role == WEREWOLF) {
+            std::string targetName;
+            std::cout << player.name << ", choose a player to kill: ";
+            std::cin >> targetName;
+
+            for (auto& p : players) {
+                if (p.name == targetName && p.alive) {
+                    p.alive = false;
+                    std::cout << p.name << " was killed by the Werewolves." << std::endl;
+                    break;
+                }
+            }
+            break;
         }
     }
 
-    if (werewolfCount == 0) {
-        cout << "\nVillagers win!" << endl;
-        return true;
+    for (auto& player : players) {
+        if (player.alive && player.role == SEER) {
+            std::cout << player.name << ", you are the Seer. Choose a player to inspect." << std::endl;
+            std::string targetName;
+            std::cin >> targetName;
+
+            for (const auto& p : players) {
+                if (p.name == targetName && p.alive) {
+                    std::cout << "The role of " << p.name << " is: ";
+                    switch (p.role) {
+                        case WEREWOLF: std::cout << "Werewolf"; break;
+                        case VILLAGER: std::cout << "Villager"; break;
+                        case SEER: std::cout << "Seer"; break;
+                        case BEGGAR: std::cout << "Villager"; break;
+                    }
+                    std::cout << std::endl;
+                    break;
+                }
+            }
+        }
     }
-    if (werewolfCount >= villagerCount) {
-        cout << "\nWerewolf wins!" << endl;
-        return true;
+}
+
+void displayWinner(const std::vector<Player>& players) {
+    int werewolves = 0, villagers = 0;
+    for (const auto& player : players) {
+        if (player.alive) {
+            if (player.role == WEREWOLF) ++werewolves;
+            else ++villagers;
+        }
     }
-    return false;
+
+    if (werewolves == 0) {
+        std::cout << "Villagers win!" << std::endl;
+    } else if (werewolves >= villagers) {
+        std::cout << "Werewolves win!" << std::endl;
+    }
 }
 
 int main() {
     int numPlayers;
+    std::cout << "Enter the number of players: ";
+    std::cin >> numPlayers;
 
-    cout << "Welcome to Werewolf Game!" << endl;
-    cout << "Enter number of players (minimum 3): ";
-    cin >> numPlayers;
-
-    if (numPlayers < 3) {
-        cout << "Need at least 3 players to play." << endl;
-        return 0;
+    if (numPlayers < 4) {
+        std::cout << "At least 4 players are required to play the game." << std::endl;
+        return 1;
     }
 
-    vector<Player> players;
-    initializePlayers(players, numPlayers);
+    std::vector<Player> players;
+    for (int i = 0; i < numPlayers; ++i) {
+        std::string name;
+        std::cout << "Enter name for player " << i + 1 << ": ";
+        std::cin >> name;
+        players.push_back({name, VILLAGER, true});
+    }
+
     assignRoles(players);
+    displayRoles(players);
 
-    bool gameEnded = false;
-
-    while (!gameEnded) {
-        displayAlivePlayers(players);
-        
-        // Werewolf's turn
-        while (!werewolfAction(players));
-
-        gameEnded = checkWinCondition(players);
-        if (gameEnded) break;
-
-        // Villagers' vote
-        displayAlivePlayers(players);
-        while (!villagersVote(players));
-
-        gameEnded = checkWinCondition(players);
+    while (!gameOver(players)) {
+        nightPhase(players);
+        if (gameOver(players)) break;
+        dayPhase(players);
     }
 
+    displayWinner(players);
+
+    std::cout << "Game over!" << std::endl;
     return 0;
 }
