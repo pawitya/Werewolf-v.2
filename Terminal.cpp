@@ -8,12 +8,13 @@
 
 using namespace std;
 
-enum Role { WEREWOLF, VILLAGER, SEER };
+enum Role { WEREWOLF, VILLAGER, SEER, BODYGUARD };
 
 struct Player {
     string name;
     Role role;
     bool alive;
+    bool protectedThisNight;  // Flag to check if player is protected by bodyguard
 };
 
 void assignRoles(vector<Player>& players) {
@@ -21,6 +22,7 @@ void assignRoles(vector<Player>& players) {
     int numPlayers = players.size();
     int numWerewolves = numPlayers / 3;
     int numSeers = 1;
+    int numBodyguards = 1;  // เพิ่มจำนวน Bodyguard เป็น 1 คน
 
     for (int i = 0; i < numWerewolves; ++i) {
         players[i].role = WEREWOLF;
@@ -28,7 +30,10 @@ void assignRoles(vector<Player>& players) {
     for (int i = numWerewolves; i < numWerewolves + numSeers; ++i) {
         players[i].role = SEER;
     }
-    for (int i = numWerewolves + numSeers; i < numPlayers; ++i) {
+    for (int i = numWerewolves + numSeers; i < numWerewolves + numSeers + numBodyguards; ++i) {
+        players[i].role = BODYGUARD;
+    }
+    for (int i = numWerewolves + numSeers + numBodyguards; i < numPlayers; ++i) {
         players[i].role = VILLAGER;
     }
 
@@ -44,6 +49,7 @@ void displayRoles(const vector<Player>& players) {
             case WEREWOLF: cout << "Werewolf"; break;
             case VILLAGER: cout << "Villager"; break;
             case SEER: cout << "Seer"; break;
+            case BODYGUARD: cout << "Bodyguard"; break;
         }
         cout << endl;
     }
@@ -63,18 +69,47 @@ bool gameOver(const vector<Player>& players) {
 void nightPhase(vector<Player>& players) {
     cout << "Night falls. Werewolves, choose your victim." << endl;
 
+    // Bodyguard action
+    string bodyguardProtection = "";
+    for (auto& player : players) {
+        if (player.alive && player.role == BODYGUARD) {
+            cout << player.name << ", choose a player to protect: ";
+            cin >> bodyguardProtection;
+            bool foundTarget = false;
+            for (auto& p : players) {
+                if (p.name == bodyguardProtection && p.alive) {
+                    foundTarget = true;
+                    p.protectedThisNight = true;
+                    cout << p.name << " is being protected by the Bodyguard." << endl;
+                    break;
+                }
+            }
+            if (!foundTarget) {
+                cout << "Player not found or player is dead." << endl;
+            }
+            break;
+        }
+    }
+
+    // Werewolf action
+    string werewolfTarget;
     for (auto& player : players) {
         if (player.alive && player.role == WEREWOLF) {
-            string targetName;
             cout << player.name << ", choose a player to kill: ";
-            cin >> targetName;
+            cin >> werewolfTarget;
 
             bool foundTarget = false;
             for (auto& p : players) {
-                if (p.name == targetName && p.alive) {
+                if (p.name == werewolfTarget && p.alive) {
                     foundTarget = true;
-                    p.alive = false;
-                    cout << p.name << " was killed by the Werewolves." << endl;
+                    // Check if the player is protected
+                    if (p.protectedThisNight) {
+                        cout << p.name << " was protected by the Bodyguard, and was not killed." << endl;
+                        p.protectedThisNight = false;  // Reset protection flag
+                    } else {
+                        p.alive = false;
+                        cout << p.name << " was killed by the Werewolves." << endl;
+                    }
                     break;
                 }
             }
@@ -86,6 +121,7 @@ void nightPhase(vector<Player>& players) {
         }
     }
 
+    // Seer action
     for (auto& player : players) {
         if (player.alive && player.role == SEER) {
             cout << player.name << ", you are the Seer. Choose a player to inspect." << endl;
@@ -101,6 +137,7 @@ void nightPhase(vector<Player>& players) {
                         case WEREWOLF: cout << "Werewolf"; break;
                         case VILLAGER: cout << "Villager"; break;
                         case SEER: cout << "Seer"; break;
+                        case BODYGUARD: cout << "Bodyguard"; break;
                     }
                     cout << endl;
                     break;
@@ -166,7 +203,7 @@ int main() {
         string name;
         cout << "Enter name for player " << i + 1 << ": ";
         cin >> name;
-        players.push_back({name, VILLAGER, true});
+        players.push_back({name, VILLAGER, true, false});
     }
 
     assignRoles(players);
@@ -183,4 +220,5 @@ int main() {
     cout << "Game over!" << endl;
     return 0;
 }
+
 
